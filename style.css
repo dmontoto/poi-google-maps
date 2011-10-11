@@ -1,0 +1,64 @@
+/**
+ * A Wordpress plugin that adds a custom post type for placemarks and builds a Google Map with them
+ * @package BasicGoogleMapsPlacemarks
+ * @author Ian Dunn <ian@iandunn.name>
+ * @link http://wordpress.org/extend/plugins/basic-google-maps-placemarks/
+ */
+
+
+/*
+ * Front end
+ * Many of these exist to override theme styles that will distort elements
+ */
+#pgm_map-canvas {
+    width: 600px;	/* The width and height here are just defaults in case the JavaScript can't load. They're overridden with the ones on the Settings page when the map is created */
+    height: 400px;
+}
+
+/*
+ *	Maps API doesn't take the infowindow's child element margins, font-size, line-height, font-weight, etc into account when calculating container size
+ *	http://stackoverflow.com/questions/1554893/google-maps-api-v3-infowindow-not-sizing-correctly/5690251#5690251
+ */
+.pgm_placemark {
+    margin: 0 !important;
+    font-size: medium !important;
+    line-height: normal !important;
+}
+
+.pgm_placemark h1 {
+    margin: 0 !important;
+    padding: 5px 0;
+    font-size: medium !important;
+    line-height: normal !important;
+    font-weight: normal !important;
+}
+		
+.pgm_placemark div {
+    margin: 0 !important;
+}
+	
+#pgm_map-canvas img {
+    width: auto;
+    max-width: none;
+    height: auto;
+    background: none !important;
+    border-width: 0;
+    padding: 0;
+    margin: 0;
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    box-shadow: none;
+}
+	
+#pgm_map-canvas #content {
+    width: auto;
+    height: auto;
+    overflow: auto;
+}
+
+/*
+ * Admin
+ */
+input#pgm_address, input#pgm_map-address {
+    width: 400px;
+}
