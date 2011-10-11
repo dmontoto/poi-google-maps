@@ -4,7 +4,7 @@
     <tbody>
         <tr>
             <th><label for="<?php echo self::PREFIX; ?>address">Address:</label></th>
-            <td><input id="<?php echo self::PREFIX; ?>address" name="<?php echo self::PREFIX; ?>address" type="text" value="<?php echo $address; ?>" /></td>
+            <td><input id="<?php echo self::PREFIX; ?>address" name="<?php echo self::PREFIX; ?>address" type="text" value="<?php echo $address; ?>" style="width: 200px;" /></td>
         </tr>
 	<tr>
             <th><label for="<?php echo self::PREFIX; ?>latitude">Latitude:</label></th>
