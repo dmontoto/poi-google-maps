@@ -3,8 +3,6 @@ if ($_SERVER['SCRIPT_FILENAME'] == __FILE__)
     die("Access denied.");
 
 if (!class_exists('PoiGoogleMaps')) {
-    include_once( 'includes/poi-google-maps_taxonomies.php' );
-
     /**
      * A Wordpress plugin that adds a custom post type for placemarks and builds a Google Map with them
      * Requires PHP5+ because of various OOP features, json_encode(), pass by reference, etc
@@ -18,7 +16,7 @@ if (!class_exists('PoiGoogleMaps')) {
 
         // Declare variables and constants
         protected $settings, $options, $updatedOptions, $userMessageCount, $mapShortcodeCalled;
-        const VERSION = '0.2';
+        const VERSION = '0.3';
         const PREFIX = 'pgm_';
         const POST_TYPE = 'pgm';
         const DEBUG_MODE = false;
@@ -40,30 +38,13 @@ if (!class_exists('PoiGoogleMaps')) {
 
             // Register actions, filters and shortcodes
             add_action('admin_notices', array($this, 'printMessages'));
-            add_action('init', array($this, 'createPostType'));
-            add_action('init', array($this, 'createPostTaxonomies'));
-            add_action('after_setup_theme', array($this, 'addFeaturedImageSupport'), 11);
-            add_action('admin_init', array($this, 'addMetaBoxes'));
             add_action('wp', array($this, 'loadResources'), 11);
             add_action('wp_head', array($this, 'outputHead'));
-            add_action('save_post', array($this, 'saveCustomFields'));
             add_action('wpmu_new_blog', array($this, 'activateNewSite'));
             add_action('shutdown', array($this, 'shutdown'));
 
-            add_filter('parse_query', array($this, 'sortAdminView'));
-
             add_shortcode('pgm-map', array($this, 'mapShortcode'));
             add_shortcode('pgm-list', array($this, 'listShortcode'));
-
-            // Gestion de listado de administracion
-            add_filter('manage_edit-' . self::POST_TYPE . '_columns', array($this, 'add_new_pgm_columns'));
-            add_action('manage_' . self::POST_TYPE . '_posts_custom_column', array($this, 'manage_pgm_columns'));
-            add_filter('manage_edit-' . self::POST_TYPE . '_sortable_columns', array($this, 'sortable_pgm_columns'));
-            add_filter('request', array($this, 'column_orderby'));
-
-            // Add filtros de taxonomy al listado de administracion
-            add_action('restrict_manage_posts', array($this, 'todo_restrict_manage_posts'));
-            add_filter('parse_query', array($this, 'todo_convert_restrict'));
 
             add_action('right_now_content_table_end', array($this, 'cpt_in_right_now'));
 
@@ -79,14 +60,6 @@ if (!class_exists('PoiGoogleMaps')) {
             global $wpdb;
 
             if (function_exists('is_multisite') && is_multisite()) {
-                // Enable image uploads so the 'Set Featured Image' meta box will be available
-                $mediaButtons = get_site_option('mu_media_buttons');
-
-                if (!array_key_exists('image', $mediaButtons) || !$mediaButtons['image']) {
-                    $mediaButtons['image'] = 1;
-                    update_site_option('mu_media_buttons', $mediaButtons);
-                }
-
                 // Activate the plugin across the network if requested
                 if (array_key_exists('networkwide', $_GET) && ( $_GET['networkwide'] == 1)) {
                     $blogs = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs");
@@ -125,22 +98,6 @@ if (!class_exists('PoiGoogleMaps')) {
                 add_option(self::PREFIX . 'map-zoom', 7);
             if (!get_option(self::PREFIX . 'map-info-window-width'))
                 add_option(self::PREFIX . 'map-info-window-width', 500);
-
-            // Upgrade 1.0 placemark data
-            $posts = get_posts(array('numberposts' => -1, 'post_type' => self::POST_TYPE));
-            if ($posts) {
-                foreach ($posts as $p) {
-                    $address = get_post_meta($p->ID, self::PREFIX . 'address', true);
-                    $latitude = get_post_meta($p->ID, self::PREFIX . 'latitude', true);
-                    $longitude = get_post_meta($p->ID, self::PREFIX . 'longitude', true);
-
-                    if (empty($address) && !empty($latitude) && !empty($longitude)) {
-                        $address = $this->reverseGeocode($latitude, $longitude);
-                        if ($address)
-                            update_post_meta($p->ID, self::PREFIX . 'address', $address);
-                    }
-                }
-            }
         }
 
         /**
@@ -177,32 +134,6 @@ if (!class_exists('PoiGoogleMaps')) {
             $this->updatedOptions = true;
 
             return true;
-        }
-
-        /**
-         * Adds featured image support
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function addFeaturedImageSupport() {
-            // We enabled image media buttons for MultiSite on activation, but the admin may have turned it back off
-            if (is_admin() && function_exists('is_multisite') && is_multisite()) {
-                $mediaButtons = get_site_option('mu_media_buttons');
-
-                if (!array_key_exists('image', $mediaButtons) || !$mediaButtons['image']) {
-                    $this->enqueueMessage(sprintf(
-                                    "%s requires the Images media button setting to be enabled in order to use custom icons on markers, but it's currently turned off. If you'd like to use custom icons you can enable it on the <a href=\"%ssettings.php\">Network Settings</a> page, in the Upload Settings section.", PGM_NAME, network_admin_url()
-                            ), 'error');
-                }
-            }
-
-            $supportedTypes = get_theme_support('post-thumbnails');
-
-            if ($supportedTypes === false)
-                add_theme_support('post-thumbnails', array(self::POST_TYPE));
-            elseif (is_array($supportedTypes)) {
-                $supportedTypes[0][] = self::POST_TYPE;
-                add_theme_support('post-thumbnails', $supportedTypes[0]);
-            }
         }
 
         /**
@@ -260,369 +191,6 @@ if (!class_exists('PoiGoogleMaps')) {
         public function outputHead() {
             if ($this->mapShortcodeCalled)
                 require_once( dirname(__FILE__) . '/views/front-end-head.php' );
-        }
-
-        /**
-         * Registers the custom post type
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function createPostType() {
-            if (!post_type_exists(self::POST_TYPE)) {
-                $labels = array(
-                    'name' => __('Pois'),
-                    'singular_name' => __('Poi'),
-                    'add_new' => __('Add New'),
-                    'add_new_item' => __('Add New Poi'),
-                    'edit' => __('Edit'),
-                    'edit_item' => __('Edit Poi'),
-                    'new_item' => __('New Poi'),
-                    'view' => __('View Poi'),
-                    'view_item' => __('View Poi'),
-                    'search_items' => __('Search Pois'),
-                    'not_found' => __('No Pois found'),
-                    'not_found_in_trash' => __('No Pois found in Trash'),
-                    'parent' => __('Parent Poi')
-                );
-
-                register_post_type(
-                        self::POST_TYPE, array(
-                    'labels' => $labels,
-                    'singular_label' => 'Pois',
-                    'public' => true,
-                    'menu_position' => 10,
-                    'hierarchical' => false,
-                    'capability_type' => 'post',
-                    'rewrite' => array('slug' => 'pois', 'with_front' => false),
-                    'query_var' => true,
-                    'supports' => array('title', 'editor', 'excerpt', 'thumbnail'),
-                    'taxonomies' => array('region'),
-                        )
-                );
-            }
-        }
-
-        /**
-         * Registers custom Taxonomies
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function createPostTaxonomies() {
-            // Add new taxonomy, make it hierarchical (like categories)
-            $labels = array(
-                'name' => _x('Region', 'taxonomy general name'),
-                'singular_name' => _x('Region', 'taxonomy singular name'),
-                'search_items' => __('Search Regions'),
-                'all_items' => __('All Regions'),
-                'parent_item' => __('Parent Region'),
-                'parent_item_colon' => __('Parent Region:'),
-                'edit_item' => __('Edit Region'),
-                'update_item' => __('Update Region'),
-                'add_new_item' => __('Add New Region'),
-                'new_item_name' => __('New Region Name'),
-            );
-
-            register_taxonomy('region', array(self::POST_TYPE), array(
-                'hierarchical' => true,
-                'public' => true,
-                'label' => 'Region',
-                'labels' => $labels,
-                'show_ui' => true,
-                'query_var' => true,
-                'rewrite' => array('slug' => 'region'),
-            ));
-
-            //Register default values
-            RegisterTaxonomiesDefaultsValues($this);
-        }
-
-        /**
-         * Adds meta boxes for the custom post type
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function addMetaBoxes() {
-            add_meta_box(self::PREFIX . 'poi-address', 'Poi Address', array($this, 'markupAddressFields'), self::POST_TYPE, 'normal', 'high');
-            add_meta_box(self::PREFIX . 'poi-zIndex', 'Stacking Order', array($this, 'markupZIndexField'), self::POST_TYPE, 'side', 'default');
-            add_meta_box(self::PREFIX . 'attachments', 'Fotos', array($this, 'markupAttachments'), self::POST_TYPE, 'normal', 'high');
-            add_meta_box(self::PREFIX . 'videos', 'Videos', array($this, 'markupVideos'), self::POST_TYPE, 'normal', 'high');
-        }
-
-        /**
-         * Outputs the markup for the address fields
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function markupAddressFields() {
-            global $post;
-
-            $address = get_post_meta($post->ID, self::PREFIX . 'address', true);
-            $latitude = get_post_meta($post->ID, self::PREFIX . 'latitude', true);
-            $longitude = get_post_meta($post->ID, self::PREFIX . 'longitude', true);
-
-            require_once( dirname(__FILE__) . '/views/meta-address.php' );
-        }
-
-        /**
-         * Outputs the markup for the stacking order field
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function markupZIndexField() {
-            global $post;
-
-            $zIndex = get_post_meta($post->ID, self::PREFIX . 'zIndex', true);
-            if (filter_var($zIndex, FILTER_VALIDATE_INT) === FALSE)
-                $zIndex = 0;
-
-            require_once( dirname(__FILE__) . '/views/meta-z-index.php' );
-        }
-
-        public function markupAttachments() {
-            global $post;
-
-            $args = array(
-                'post_type' => 'attachment',
-                'numberposts' => null,
-                'post_status' => null,
-                'post_parent' => $post->ID
-            );
-
-            $attachments = get_posts($args);
-
-            if ($attachments) {
-                foreach ($attachments as $attachment) {
-                    //echo apply_filters('the_title', $attachment->post_title);
-                    the_attachment_link($attachment->ID, false);
-                }
-            }
-        }
-
-        public function markupVideos() {
-            global $post;
-
-            $youtubeRegex = '%.*\?v=([a-zA-Z0-9\-_]+).*%i';
-            $vimeoRegex = '/^http:\/\/(www\.)?vimeo\.com\/(clip\:)?(\d+).*$/';
-
-            //We get an array with every videos attached to restaurant ( single=false )
-            $videos = get_post_meta($post->ID, self::PREFIX . 'videos', false);
-
-            //Show videos' thumbnails
-            $video_id = array();
-            foreach ($videos as $video) {
-                if (filter_var($video, FILTER_VALIDATE_URL) !== FALSE
-                        &&
-                        ( preg_match($youtubeRegex, $video, $results) != FALSE //We use != instead of !== because we don't want FALSE, nor 0
-                        || preg_match($vimeoRegex, $video, $results) != FALSE )
-                ) {
-
-                    $videoUrl = $video;
-                    if (preg_match($youtubeRegex, $video, $results) != FALSE)
-                        $videoImg = 'http://img.youtube.com/vi/' . $results[1] . '/default.jpg';
-                    elseif (preg_match($vimeoRegex, $video, $results) != FALSE) {
-                        $vimeoId = $results[3];
-                        $hash = unserialize(file_get_contents('http://vimeo.com/api/v2/video/' . $vimeoId . '.php'));
-                        $videoImg = $hash[0]['thumbnail_medium'];
-                    }
-
-                    printf('<a href="%s" target="_blank"><img src="%s"></a>', $video, $videoImg);
-                }
-            }
-
-            //Show new video's form
-            require_once( dirname(__FILE__) . '/views/meta-videos.php' );
-        }
-
-        /**
-         * Saves values of the the custom post type's extra fields
-         * @param
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function saveCustomFields($postID) {
-            global $post;
-            $coordinates = false;
-
-            if ($post && $post->post_type == self::POST_TYPE && current_user_can('edit_posts') && $_GET['action'] != 'trash' && $_GET['action'] != 'untrash') {
-                if (( defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ) || $post->post_status == 'auto-draft')
-                    return;
-
-                // Save address
-                update_post_meta($post->ID, self::PREFIX . 'address', $_POST[self::PREFIX . 'address']);
-
-                if ($_POST[self::PREFIX . 'address'])
-                    $coordinates = $this->geocode($_POST[self::PREFIX . 'address']);
-
-                if ($coordinates) {
-                    update_post_meta($post->ID, self::PREFIX . 'latitude', $coordinates['latitude']);
-                    update_post_meta($post->ID, self::PREFIX . 'longitude', $coordinates['longitude']);
-                } else {
-                    update_post_meta($post->ID, self::PREFIX . 'latitude', '');
-                    update_post_meta($post->ID, self::PREFIX . 'longitude', '');
-
-                    if (!empty($_POST[self::PREFIX . 'address']))
-                        $this->enqueueMessage('That address couldn\'t be geocoded, please make sure that it\'s correct.', 'error');
-                }
-
-                // Save z-index
-                if (filter_var($_POST[self::PREFIX . 'zIndex'], FILTER_VALIDATE_INT) === FALSE) {
-                    update_post_meta($post->ID, self::PREFIX . 'zIndex', 0);
-                    $this->enqueueMessage('The stacking order has to be an integer', 'error');
-                }
-                else
-                    update_post_meta($post->ID, self::PREFIX . 'zIndex', $_POST[self::PREFIX . 'zIndex']);
-
-                // Save video
-                if (filter_var($_POST[self::PREFIX . 'video'], FILTER_VALIDATE_URL) === FALSE) {
-                    //update_post_meta( $post->ID, self::PREFIX . 'video', 0 );
-                    $this->enqueueMessage('El video tiene que ser una URL válida', 'error');
-                } elseif (preg_match('%.*?v=([a-z0-9\-_]+).*%', $_POST[self::PREFIX . 'videos']) !== FALSE)
-                    add_post_meta($post->ID, self::PREFIX . 'videos', $_POST[self::PREFIX . 'video'], false);
-            }
-        }
-
-        /**
-         * Sorts the posts by the title in the admin view posts screen
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        function sortAdminView($query) {
-            global $pagenow;
-
-            if (is_admin() && $pagenow == 'edit.php' && array_key_exists('post_type', $_GET) && $_GET['post_type'] == self::POST_TYPE) {
-                $query->query_vars['order'] = 'ASC';
-                $query->query_vars['orderby'] = 'title';
-            }
-        }
-
-        /**
-         * Register columns
-         * @param type $columns
-         * @return type 
-         */
-        function add_new_pgm_columns($columns) {
-            $new_columns['cb'] = '<input type="checkbox" />';
-
-            $new_columns['id'] = __('ID');
-            $new_columns['title'] = _x('Poi Name', 'column name');
-            $new_columns['region'] = __('Region');
-            $new_columns['fotos'] = __('Fotos');
-            $new_columns['date'] = _x('Date', 'column name');
-
-            return $new_columns;
-        }
-
-        /**
-         * Display the column content
-         * @global type $wpdb
-         * @param type $column_name
-         * @param type $id 
-         */
-        function manage_pgm_columns($column_name) {
-            global $post;
-            switch ($column_name) {
-                case 'id':
-                    echo $post->ID;
-                    break;
-
-                case 'region':
-                    $taxonomy = $column_name;
-                    $post_type = get_post_type($post->ID);
-                    $terms = get_the_terms($post->ID, $taxonomy);
-
-                    if (!empty($terms)) {
-                        foreach ($terms as $term)
-                            $post_terms[] = "<a href='edit.php?post_type={$post_type}&region=" . $term->term_id . "&action=-1&mode=list&action2=-1'> " . esc_html(sanitize_term_field('name', $term->name, $term->term_id, $taxonomy, 'edit')) . "</a>";
-                        echo join(', ', $post_terms);
-                    }
-                    else
-                        echo '<i>No terms.</i>';
-                    break;
-                case 'fotos':
-                    $args = array(
-                        'post_type' => 'attachment',
-                        'numberposts' => null,
-                        'post_status' => null,
-                        'post_parent' => $post->ID
-                    );
-
-                    $attachments = get_posts($args);
-
-                    echo count($attachments);
-                    break;
-                default:
-                    break;
-            } // end switch
-        }
-
-        /**
-         * Register columns as sortable
-         * @param array $columns
-         * @return string 
-         */
-        function sortable_pgm_columns($columns) {
-            $columns['region'] = 'region';
-
-            return $columns;
-        }
-
-        /**
-         * Le decimos como ordenar
-         * @param type $vars 
-         */
-        function column_orderby($vars) {
-            if (isset($vars['orderby'])) {
-                switch ($vars['orderby']) {
-                    case 'region':
-                        $vars = array_merge($vars, array(
-                            'meta_key' => 'region',
-                            'orderby' => 'meta_value_num'
-                                ));
-                }
-            }
-
-            return $vars;
-        }
-
-        /**
-         * Add dropdowns con las taxonomies
-         * @global type $typenow
-         */
-        function todo_restrict_manage_posts() {
-            global $typenow;
-            $args = array('public' => true, '_builtin' => false);
-            $post_types = get_post_types($args);
-            if (in_array($typenow, $post_types)) {
-                $filters = get_object_taxonomies($typenow);
-                foreach ($filters as $tax_slug) {
-                    $tax_obj = get_taxonomy($tax_slug);
-                    wp_dropdown_categories(array(
-                        'show_option_all' => __('Show All ' . $tax_obj->label),
-                        'taxonomy' => $tax_slug,
-                        'name' => $tax_obj->name,
-                        'orderby' => 'term_order',
-                        'selected' => $_GET[$tax_obj->query_var],
-                        'hierarchical' => $tax_obj->hierarchical,
-                        'show_count' => true,
-                        'hide_empty' => false
-                    ));
-                }
-            }
-        }
-
-        /**
-         * Add filters para los taxonomies
-         * @global type $pagenow
-         * @global type $typenow
-         * @param type $query 
-         */
-        function todo_convert_restrict($query) {
-            global $pagenow;
-            global $typenow;
-            if ($pagenow == 'edit.php') {
-                // Aplicamos los filtros
-                $filters = get_object_taxonomies($typenow);
-                foreach ($filters as $tax_slug) {
-                    $var = &$query->query_vars[$tax_slug];
-                    if (isset($var)) {
-                        $term = get_term_by('id', $var, $tax_slug);
-                        $var = $term->slug;
-                    }
-                }
-            }
         }
 
         /**
@@ -784,27 +352,6 @@ if (!class_exists('PoiGoogleMaps')) {
         }
 
         /**
-         * Register values in a taxonomy
-         * @param type $term
-         * @param type $taxonomy
-         * @param type $args
-         * @return type 
-         */
-        public function insert_term($term, $taxonomy, $args = array()) {
-            if (isset($args['parent'])) {
-                $parent = $args['parent'];
-            } else {
-                $parent = 0;
-            }
-            $result = term_exists($term, $taxonomy, $parent);
-            if ($result == false || $result == 0) {
-                return wp_insert_term($term, $taxonomy, $args);
-            } else {
-                return (array) $result;
-            }
-        }
-
-        /**
          * Stops execution and prints the input. Used for debugging.
          * @author Diego Montoto <dmontoto@gmail.com>
          * @param mixed $data
@@ -870,18 +417,18 @@ if (!class_exists('PoiGoogleMaps')) {
             <p class="sub poi_sub"><?php _e('Poi Content', 'poithemes'); ?></p>
             <table>
                 <tr>
-                    <td class="first b"><a href="edit.php?post_type=pgm"><?php
-            $num_posts = wp_count_posts('pgm');
+                    <td class="first b"><a href="edit.php?post_type=pgm_camping"><?php
+            $num_posts = wp_count_posts('pgm_camping');
             $num = number_format_i18n($num_posts->publish);
             echo $num;
             ?></a></td>
-                    <td class="t"><a href="edit.php?post_type=pgm"><?php _e('Pois', 'poithemes'); ?></a></td>
+                    <td class="t"><a href="edit.php?post_type=pgm_camping"><?php _e('Campings', 'poithemes'); ?></a></td>
                 </tr>
                <tr>
-                    <td class="first b"><a href="edit.php?taxonomy=region&post_type=pgm"><?php
+                    <td class="first b"><a href="edit.php?taxonomy=region&post_type=pgm_camping"><?php
                     echo wp_count_terms('region');
             ?></a></td>
-                    <td class="t"><a href="edit.php?taxonomy=region&post_type=pgm"><?php _e('Regions', 'poithemes'); ?></a></td>
+                    <td class="t"><a href="edit.php?taxonomy=region&post_type=pgm_camping"><?php _e('Regions', 'poithemes'); ?></a></td>
                 </tr>
             <?php
         }
@@ -890,7 +437,6 @@ if (!class_exists('PoiGoogleMaps')) {
          * Regeneramos las rewrite rules
          */
         public function my_rewrite_flush() {
-            createPostType();
             flush_rewrite_rules();
         }
 

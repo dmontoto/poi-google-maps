@@ -3,7 +3,7 @@
 Plugin Name: Poi Google Maps
 Plugin URI: 
 Description: Muestra Pois en un mapa
-Version: 0.2
+Version: 0.3
 Author: Diego Montoto Garcia
 Author URI: 
 License: GPL2
@@ -77,10 +77,16 @@ function pgm_requirementsNotMet()
 if( pgm_requirementsMet() )
 {
 	require_once( dirname(__FILE__) . '/core.php' );
+        require_once( dirname(__FILE__) . '/postTypes/camping.postType.php' );
+        require_once( dirname(__FILE__) . '/taxonomies/region.taxonomy.php' );
+        
 	wp_enqueue_style('poi-admin-stylesheet', plugins_url('/css/poi.admin-general.css', __FILE__), array(), '1.0', 'screen');
         
-	if( class_exists('PoiGoogleMaps') )
-		$pgm = new PoiGoogleMaps();
+	if( class_exists('PoiGoogleMaps') ) $pgm = new PoiGoogleMaps();
+        
+        //Register Custom PostTypes
+        if( class_exists('Poi_Camping') ) $pgm_camping = new Poi_Camping();
+        if( class_exists('Poi_Region') ) $pgm = new Poi_Region();
 }
 else
 	add_action( 'admin_notices', 'pgm_requirementsNotMet' );
