@@ -77,7 +77,8 @@ function pgm_requirementsNotMet()
 if( pgm_requirementsMet() )
 {
 	require_once( dirname(__FILE__) . '/core.php' );
-	
+	wp_enqueue_style('poi-admin-stylesheet', plugins_url('/css/poi.admin-general.css', __FILE__), array(), '1.0', 'screen');
+        
 	if( class_exists('PoiGoogleMaps') )
 		$pgm = new PoiGoogleMaps();
 }

@@ -1,0 +1,10 @@
+/* 
+    Document   : poi.admin.css
+    Created on : 12-oct-2011, 20:59:20
+    Author     : Dmontoto
+    Description:
+        Purpose of the stylesheet follows.
+*/
+
+#dashboard_right_now p.poi_sub{position:static;top:auto;left:auto;margin:15px 5px 0;padding:0 0 5px 0;border-bottom:#ECECEC 1px solid;}
+
