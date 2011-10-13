@@ -3,6 +3,7 @@ if ($_SERVER['SCRIPT_FILENAME'] == __FILE__)
     die("Access denied.");
 
 if (!class_exists('PoiGoogleMaps')) {
+
     /**
      * A Wordpress plugin that adds a custom post type for placemarks and builds a Google Map with them
      * Requires PHP5+ because of various OOP features, json_encode(), pass by reference, etc
@@ -424,33 +425,33 @@ if (!class_exists('PoiGoogleMaps')) {
             ?></a></td>
                     <td class="t"><a href="edit-tags.php?post_type=pgm_camping"><?php _e('Campings', 'poithemes'); ?></a></td>
                 </tr>
-               <tr>
+                <tr>
                     <td class="first b"><a href="edit.php?taxonomy=region&post_type=pgm_camping"><?php
-                    echo wp_count_terms('region');
+            echo wp_count_terms('region');
             ?></a></td>
                     <td class="t"><a href="edit-tags.php?taxonomy=region&post_type=pgm_camping"><?php _e('Regions', 'poithemes'); ?></a></td>
                 </tr>
-            <?php
-        }
+                <?php
+            }
 
-        /**
-         * Regeneramos las rewrite rules
-         */
-        public function my_rewrite_flush() {
-            flush_rewrite_rules();
-        }
+            /**
+             * Regeneramos las rewrite rules
+             */
+            public function my_rewrite_flush() {
+                flush_rewrite_rules();
+            }
 
-        /**
-         * Writes options to the database
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function shutdown() {
-            if (is_admin())
-                if ($this->updatedOptions)
-                    update_option(self::PREFIX . 'options', $this->options);
+            /**
+             * Writes options to the database
+             * @author Diego Montoto <dmontoto@gmail.com>
+             */
+            public function shutdown() {
+                if (is_admin())
+                    if ($this->updatedOptions)
+                        update_option(self::PREFIX . 'options', $this->options);
+            }
+
         }
 
     }
-
-}
-?>
+    ?>

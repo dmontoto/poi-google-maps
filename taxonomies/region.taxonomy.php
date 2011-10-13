@@ -15,12 +15,13 @@ if (!class_exists('Poi_Region')) {
      * @link 
      */
     class Poi_Region {
-
+        private $postTypes = array();
         /**
          * Constructor
          * @author Diego Montoto <dmontoto@gmail.com>
          */
-        public function __construct() {
+        public function __construct($postTypesArray) {
+            $this->postTypes = $postTypesArray;
             add_action('init', array($this, 'createPostTaxonomies'));
         }
 
@@ -43,7 +44,7 @@ if (!class_exists('Poi_Region')) {
                 'new_item_name' => __('New Region Name'),
             );
 
-            register_taxonomy('region', array('pgm_camping'), array(
+            register_taxonomy('region', $this->postTypes, array(
                 'hierarchical' => true,
                 'public' => true,
                 'label' => 'Region',
