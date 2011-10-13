@@ -21,6 +21,7 @@ if (!class_exists('PoiGoogleMaps')) {
         const PREFIX = 'pgm_';
         const POST_TYPE = 'pgm';
         const DEBUG_MODE = false;
+        private $typesToShow = array();
 
         /**
          * Constructor
@@ -37,15 +38,16 @@ if (!class_exists('PoiGoogleMaps')) {
             $this->mapShortcodeCalled = false;
             $this->settings = new PGMSettings($this);
 
+            add_shortcode('pgm-map', array($this, 'mapShortcode'));
+            add_shortcode('pgm-list', array($this, 'listShortcode'));
+
             // Register actions, filters and shortcodes
             add_action('admin_notices', array($this, 'printMessages'));
             add_action('wp', array($this, 'loadResources'), 11);
             add_action('wp_head', array($this, 'outputHead'));
             add_action('wpmu_new_blog', array($this, 'activateNewSite'));
+            add_action('wp_footer', array($this, 'footerScripts'));
             add_action('shutdown', array($this, 'shutdown'));
-
-            add_shortcode('pgm-map', array($this, 'mapShortcode'));
-            add_shortcode('pgm-list', array($this, 'listShortcode'));
 
             add_action('right_now_content_table_end', array($this, 'cpt_in_right_now'));
 
@@ -174,10 +176,6 @@ if (!class_exists('PoiGoogleMaps')) {
             if (!is_admin() && $this->mapShortcodeCalled) {
                 wp_enqueue_script('googleMapsAPI');
                 wp_enqueue_script('pgm');
-
-                $pgmData = sprintf("pgmData.options = %s;\r\npgmData.markers = %s", json_encode($this->getMapOptions()), json_encode($this->getPlacemarks()));
-
-                wp_localize_script('pgm', 'pgmData', array('l10n_print_after' => $pgmData));
             }
 
             if (is_admin() || $this->mapShortcodeCalled) {
@@ -228,16 +226,26 @@ if (!class_exists('PoiGoogleMaps')) {
         }
 
         /**
-         * Defines the [pgm-map] shortcode
+         * Defines the [pgm-map posttypes='pgm_camping, pgm_...'] shortcode
          * @author Diego Montoto <dmontoto@gmail.com>
          * @param array $attributes Array of parameters automatically passed in by Wordpress
          * return string The output of the shortcode
          */
-        public function mapShortcode($attributes) {
+        public function mapShortcode($atts) {
             if (!wp_script_is('googleMapsAPI', 'queue') || !wp_script_is('pgm', 'queue') || !wp_style_is(self::PREFIX . 'style', 'queue'))
                 return '<p class="error">' . BGMP_NAME . ' error: JavaScript and/or CSS files aren\'t loaded. If you\'re using do_shortcode() you need to add a filter to your theme first. See <a href="http://wordpress.org/extend/plugins/basic-google-maps-placemarks/faq/">the FAQ</a> for details.</p>';
 
-            $output = sprintf('
+            $params = shortcode_atts(array('posttypes' => 'pgm_camping',), $atts);
+
+            //Extract post Types to show
+            foreach (explode(",", $params['posttypes']) as $postTypeToShow) {
+                array_push($this->typesToShow, $postTypeToShow);
+            }
+
+            $pgmData = sprintf("pgmData.options = %s;\r\npgmData.markers = %s;", json_encode($this->getMapOptions()), json_encode($this->getPlacemarks()));
+            wp_localize_script('pgm', 'pgmData', array('l10n_print_after' => $pgmData));
+
+            $output .= sprintf('
 				<div id="%smap-canvas">
 					<p>Loading map...</p>
 					<p><img src="%s" alt="Loading" /></p>
@@ -312,7 +320,20 @@ if (!class_exists('PoiGoogleMaps')) {
          */
         public function getPlacemarks() {
             $placemarks = array();
-            $publishedPlacemarks = get_posts(array('numberposts' => -1, 'post_type' => 'pgm_camping', 'post_status' => 'publish'));
+
+            foreach ($this->typesToShow as $typeToShow) {
+                $placemarks = array_merge($placemarks, $this->getPlacemarksFromType($typeToShow));
+            }
+
+            return $placemarks;
+        }
+
+        private function getPlacemarksFromType($nameOfTypeToShow) {
+            $placemarks = array();
+
+            $postType = $nameOfTypeToShow;
+            $prefixPostType = $nameOfTypeToShow . '_';
+            $publishedPlacemarks = get_posts(array('numberposts' => -1, 'post_type' => $postType, 'post_status' => 'publish'));
 
             if ($publishedPlacemarks) {
                 foreach ($publishedPlacemarks as $pp) {
@@ -320,11 +341,11 @@ if (!class_exists('PoiGoogleMaps')) {
 
                     $placemarks[] = array(
                         'title' => $pp->post_title,
-                        'latitude' => get_post_meta($pp->ID, 'pgm_camping_' . 'latitude', true),
-                        'longitude' => get_post_meta($pp->ID, 'pgm_camping_' . 'longitude', true),
+                        'latitude' => get_post_meta($pp->ID, $prefixPostType . 'latitude', true),
+                        'longitude' => get_post_meta($pp->ID, $prefixPostType . 'longitude', true),
                         'details' => nl2br($pp->post_content),
                         'icon' => is_array($icon) ? $icon[0] : plugins_url('images/default-marker.png', __FILE__),
-                        'zIndex' => get_post_meta($pp->ID, 'pgm_camping_' . 'zIndex', true),
+                        'zIndex' => get_post_meta($pp->ID, $prefixPostType . 'zIndex', true),
                     );
                 }
             }
