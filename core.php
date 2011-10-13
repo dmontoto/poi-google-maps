@@ -312,7 +312,7 @@ if (!class_exists('PoiGoogleMaps')) {
          */
         public function getPlacemarks() {
             $placemarks = array();
-            $publishedPlacemarks = get_posts(array('numberposts' => -1, 'post_type' => self::POST_TYPE, 'post_status' => 'publish'));
+            $publishedPlacemarks = get_posts(array('numberposts' => -1, 'post_type' => 'pgm_camping', 'post_status' => 'publish'));
 
             if ($publishedPlacemarks) {
                 foreach ($publishedPlacemarks as $pp) {
@@ -320,11 +320,11 @@ if (!class_exists('PoiGoogleMaps')) {
 
                     $placemarks[] = array(
                         'title' => $pp->post_title,
-                        'latitude' => get_post_meta($pp->ID, self::PREFIX . 'latitude', true),
-                        'longitude' => get_post_meta($pp->ID, self::PREFIX . 'longitude', true),
+                        'latitude' => get_post_meta($pp->ID, 'pgm_camping_' . 'latitude', true),
+                        'longitude' => get_post_meta($pp->ID, 'pgm_camping_' . 'longitude', true),
                         'details' => nl2br($pp->post_content),
                         'icon' => is_array($icon) ? $icon[0] : plugins_url('images/default-marker.png', __FILE__),
-                        'zIndex' => get_post_meta($pp->ID, self::PREFIX . 'zIndex', true),
+                        'zIndex' => get_post_meta($pp->ID, 'pgm_camping_' . 'zIndex', true),
                     );
                 }
             }
@@ -427,7 +427,7 @@ if (!class_exists('PoiGoogleMaps')) {
                 </tr>
                 <tr>
                     <td class="first b"><a href="edit.php?taxonomy=region&post_type=pgm_camping"><?php
-            echo wp_count_terms('region');
+                echo wp_count_terms('region');
             ?></a></td>
                     <td class="t"><a href="edit-tags.php?taxonomy=region&post_type=pgm_camping"><?php _e('Regions', 'poithemes'); ?></a></td>
                 </tr>
