@@ -14,7 +14,8 @@ if (!class_exists('Poi_Camping')) {
      * @author Diego Montoto <dmontoto@gmail.com>
      * @link 
      */
-    class Poi_Camping {
+    class Poi_Camping extends Poi_Base {
+        const VERSION = '0.3';
         const POST_TYPE = 'pgm_camping';
         const PREFIX = 'pgm_camping_';
 
@@ -23,13 +24,12 @@ if (!class_exists('Poi_Camping')) {
          * @author Diego Montoto <dmontoto@gmail.com>
          */
         public function __construct() {
-            // Register actions, filters and shortcodes
-            add_action('init', array($this, 'createPostType'));
-            add_action('save_post', array($this, 'saveCustomFields'));
-            add_action('admin_init', array($this, 'addMetaBoxes'));
-            add_action('after_setup_theme', array($this, 'addFeaturedImageSupport'), 11);
-            add_action('shutdown', array($this, 'shutdown'));
+            parent::__construct(self::POST_TYPE, self::PREFIX);
 
+            // Register actions, filters and shortcodes
+            add_action('admin_init', array($this, 'addMetaBoxes'));
+            add_action('admin_enqueue_scripts', array($this, 'loadMapAdminResources'), 11);
+            
             // Gestion de listado de administracion
             add_filter('parse_query', array($this, 'sortAdminView'));
             add_filter('manage_edit-' . self::POST_TYPE . '_columns', array($this, 'add_new_pgm_columns'));
@@ -40,43 +40,6 @@ if (!class_exists('Poi_Camping')) {
             // Add filtros de taxonomy al listado de administracion
             add_action('restrict_manage_posts', array($this, 'todo_restrict_manage_posts'));
             add_filter('parse_query', array($this, 'todo_convert_restrict'));
-
-            register_activation_hook(dirname(__FILE__) . '/poi-google-maps.php', array($this, 'networkActivate'));
-            register_activation_hook(dirname(__FILE__) . '/poi-google-maps.php', array($this, 'my_rewrite_flush'));
-        }
-
-        /**
-         * Handles extra activation tasks for MultiSite installations
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function networkActivate() {
-            global $wpdb;
-
-            if (function_exists('is_multisite') && is_multisite()) {
-                // Enable image uploads so the 'Set Featured Image' meta box will be available
-                $mediaButtons = get_site_option('mu_media_buttons');
-
-                if (!array_key_exists('image', $mediaButtons) || !$mediaButtons['image']) {
-                    $mediaButtons['image'] = 1;
-                    update_site_option('mu_media_buttons', $mediaButtons);
-                }
-
-                // Activate the plugin across the network if requested
-                if (array_key_exists('networkwide', $_GET) && ( $_GET['networkwide'] == 1)) {
-                    $blogs = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs");
-
-                    foreach ($blogs as $b) {
-                        switch_to_blog($b);
-                        $this->singleActivate();
-                    }
-
-                    restore_current_blog();
-                }
-                else
-                    $this->singleActivate();
-            }
-            else
-                $this->singleActivate();
         }
 
         /**
@@ -99,17 +62,6 @@ if (!class_exists('Poi_Camping')) {
                     }
                 }
             }
-        }
-
-        /**
-         * Runs activation code on a new WPMS site when it's created
-         * @author Diego Montoto <dmontoto@gmail.com>
-         * @param int $blogID
-         */
-        public function activateNewSite($blogID) {
-            switch_to_blog($blogID);
-            $this->singleActivate();
-            restore_current_blog();
         }
 
         /**
@@ -156,11 +108,58 @@ if (!class_exists('Poi_Camping')) {
          * @author Diego Montoto <dmontoto@gmail.com>
          */
         public function addMetaBoxes() {
-            add_meta_box(self::PREFIX . 'poi-address', 'Poi Address', array($this, 'markupAddressFields'), self::POST_TYPE, 'normal', 'high');
+            add_meta_box(self::PREFIX . 'poi-address', 'Dirección', array($this, 'markupAddressFields'), self::POST_TYPE, 'normal', 'high');
             add_meta_box(self::PREFIX . 'attachments', 'Fotos', array($this, 'markupAttachments'), self::POST_TYPE, 'normal', 'high');
             add_meta_box(self::PREFIX . 'videos', 'Videos', array($this, 'markupVideos'), self::POST_TYPE, 'normal', 'high');
         }
 
+        public function loadMapAdminResources(){
+            global $post;
+            //Mapa de GoogleMaps
+            if(is_admin()){
+                wp_register_script('googleMapsAPI', 'http' . ( is_ssl() ? 's' : '' ) . '://maps.google.com/maps/api/js?sensor=false', false, false, true);
+                wp_enqueue_script('googleMapsAPI');
+                wp_register_script('pgmAdmin', plugins_url('poi-google-maps/javascript/pgm_gmaps_admin.js'), array('googleMapsAPI', 'jquery'), self::VERSION, true);
+                wp_enqueue_script('pgmAdmin');
+                
+                //Establecemos los parametros del mapa
+                if(get_post_meta($post->ID, self::PREFIX . 'latitude', true)){
+                    $map_latitude = get_post_meta($post->ID, self::PREFIX . 'latitude', true);
+                    $map_longitude = get_post_meta($post->ID, self::PREFIX . 'longitude', true);
+                    $marker_latitude = get_post_meta($post->ID, self::PREFIX . 'latitude', true);
+                    $marker_longitude = get_post_meta($post->ID, self::PREFIX . 'longitude', true);
+                } else {
+                    $map_latitude = "40.4093135509089";
+                    $map_longitude = "-3.636474429687496";
+                    $marker_latitude = "40.4093135509089";
+                    $marker_longitude = "-3.636474429687496";
+                }
+                
+                //Establecemos las opciones del mapa de GoogleMaps para la administración
+                $options = array(
+                    'mapWidth' => '350',
+                    'mapHeight' => '200',
+                    'latitude' => $map_latitude,
+                    'longitude' => $map_longitude,
+                    'zoom' => '8'
+                );
+
+                //Establecemos el punto si ya ha sido seleccionado
+                $placemarks = array();
+                $placemarks[] = array(
+                    'title' => '',
+                    'latitude' => $marker_latitude,
+                    'longitude' => $marker_longitude,
+                    'draggable' => true,
+                    'icon' => plugins_url('poi-google-maps/images/default-marker.png')
+                );
+
+                $pgmAdminData = sprintf("pgmAdminData.options = %s;\r\npgmAdminData.markers = %s", json_encode($options), json_encode($placemarks));
+                wp_localize_script('pgmAdmin', 'pgmAdminData', array('l10n_print_after' => $pgmAdminData));
+               
+            }
+        }
+        
         /**
          * Outputs the markup for the address fields
          * @author Diego Montoto <dmontoto@gmail.com>
@@ -169,9 +168,16 @@ if (!class_exists('Poi_Camping')) {
             global $post;
 
             $address = get_post_meta($post->ID, self::PREFIX . 'address', true);
+            $city = get_post_meta($post->ID, self::PREFIX . 'city', true);
+            $postalcode = get_post_meta($post->ID, self::PREFIX . 'postalcode', true);
+            $telephone = get_post_meta($post->ID, self::PREFIX . 'telephone', true);
+            $fax = get_post_meta($post->ID, self::PREFIX . 'fax', true);
+            $email = get_post_meta($post->ID, self::PREFIX . 'email', true);
+            $website = get_post_meta($post->ID, self::PREFIX . 'website', true);
+            
             $latitude = get_post_meta($post->ID, self::PREFIX . 'latitude', true);
             $longitude = get_post_meta($post->ID, self::PREFIX . 'longitude', true);
-
+            
             require_once( dirname(__FILE__) . '\metaboxes\meta-address.php' );
         }
 
@@ -201,7 +207,7 @@ if (!class_exists('Poi_Camping')) {
             $youtubeRegex = '%.*\?v=([a-zA-Z0-9\-_]+).*%i';
             $vimeoRegex = '/^http:\/\/(www\.)?vimeo\.com\/(clip\:)?(\d+).*$/';
 
-            //We get an array with every videos attached to restaurant ( single=false )
+            //We get an array with every videos attached ( single=false )
             $videos = get_post_meta($post->ID, self::PREFIX . 'videos', false);
 
             //Show videos' thumbnails
@@ -231,39 +237,13 @@ if (!class_exists('Poi_Camping')) {
         }
 
         /**
-         * Adds featured image support
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function addFeaturedImageSupport() {
-            // We enabled image media buttons for MultiSite on activation, but the admin may have turned it back off
-            if (is_admin() && function_exists('is_multisite') && is_multisite()) {
-                $mediaButtons = get_site_option('mu_media_buttons');
-
-                if (!array_key_exists('image', $mediaButtons) || !$mediaButtons['image']) {
-                    $this->enqueueMessage(sprintf(
-                                    "%s requires the Images media button setting to be enabled in order to use custom icons on markers, but it's currently turned off. If you'd like to use custom icons you can enable it on the <a href=\"%ssettings.php\">Network Settings</a> page, in the Upload Settings section.", PGM_NAME, network_admin_url()
-                            ), 'error');
-                }
-            }
-
-            $supportedTypes = get_theme_support('post-thumbnails');
-
-            if ($supportedTypes === false)
-                add_theme_support('post-thumbnails', array(self::POST_TYPE));
-            elseif (is_array($supportedTypes)) {
-                $supportedTypes[0][] = self::POST_TYPE;
-                add_theme_support('post-thumbnails', $supportedTypes[0]);
-            }
-        }
-        
-        /**
          * Saves values of the the custom post type's extra fields
          * @param
          * @author Diego Montoto <dmontoto@gmail.com>
          */
-        public function saveCustomFields($postID) {
-            global $post;
-            $coordinates = false;
+        public function saveCustomFields($postID, $post) {
+            //Init Errors
+            $errors = false;
 
             if ($post && $post->post_type == self::POST_TYPE && current_user_can('edit_posts') && $_GET['action'] != 'trash' && $_GET['action'] != 'untrash') {
                 if (( defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ) || $post->post_status == 'auto-draft')
@@ -271,35 +251,24 @@ if (!class_exists('Poi_Camping')) {
 
                 // Save address
                 update_post_meta($post->ID, self::PREFIX . 'address', $_POST[self::PREFIX . 'address']);
+                update_post_meta($post->ID, self::PREFIX . 'city', $_POST[self::PREFIX . 'city']);
+                update_post_meta($post->ID, self::PREFIX . 'postalcode', $_POST[self::PREFIX . 'postalcode']);
+                update_post_meta($post->ID, self::PREFIX . 'telephone', $_POST[self::PREFIX . 'telephone']);
+                update_post_meta($post->ID, self::PREFIX . 'fax', $_POST[self::PREFIX . 'fax']);
+                update_post_meta($post->ID, self::PREFIX . 'email', $_POST[self::PREFIX . 'email']);
+                update_post_meta($post->ID, self::PREFIX . 'website', $_POST[self::PREFIX . 'website']);
 
-                if ($_POST[self::PREFIX . 'address'])
-                    $coordinates = $this->geocode($_POST[self::PREFIX . 'address']);
-
-                if ($coordinates) {
-                    update_post_meta($post->ID, self::PREFIX . 'latitude', $coordinates['latitude']);
-                    update_post_meta($post->ID, self::PREFIX . 'longitude', $coordinates['longitude']);
-                } else {
-                    update_post_meta($post->ID, self::PREFIX . 'latitude', '');
-                    update_post_meta($post->ID, self::PREFIX . 'longitude', '');
-
-                    if (!empty($_POST[self::PREFIX . 'address']))
-                        $this->enqueueMessage('That address couldn\'t be geocoded, please make sure that it\'s correct.', 'error');
-                }
-
-                // Save z-index
-                if (filter_var($_POST[self::PREFIX . 'zIndex'], FILTER_VALIDATE_INT) === FALSE) {
-                    update_post_meta($post->ID, self::PREFIX . 'zIndex', 0);
-                    $this->enqueueMessage('The stacking order has to be an integer', 'error');
-                }
-                else
-                    update_post_meta($post->ID, self::PREFIX . 'zIndex', $_POST[self::PREFIX . 'zIndex']);
+                update_post_meta($post->ID, self::PREFIX . 'latitude', $_POST[self::PREFIX . 'latitude']);
+                update_post_meta($post->ID, self::PREFIX . 'longitude', $_POST[self::PREFIX . 'longitude']);
 
                 // Save video
-                if (filter_var($_POST[self::PREFIX . 'video'], FILTER_VALIDATE_URL) === FALSE) {
-                    //update_post_meta( $post->ID, self::PREFIX . 'video', 0 );
-                    $this->enqueueMessage('El video tiene que ser una URL válida', 'error');
-                } elseif (preg_match('%.*?v=([a-z0-9\-_]+).*%', $_POST[self::PREFIX . 'videos']) !== FALSE)
-                    add_post_meta($post->ID, self::PREFIX . 'videos', $_POST[self::PREFIX . 'video'], false);
+                if($_POST[self::PREFIX . 'video'] != ""){
+                    if (filter_var($_POST[self::PREFIX . 'video'], FILTER_VALIDATE_URL) === FALSE) {
+                        //update_post_meta( $post->ID, self::PREFIX . 'video', 0 );
+                        $this->enqueueMessage('La url '. $_POST[self::PREFIX . 'video'] .' no es una URL válida', 'error');
+                    } elseif (preg_match('%.*?v=([a-z0-9\-_]+).*%', $_POST[self::PREFIX . 'videos']) !== FALSE)
+                        add_post_meta($post->ID, self::PREFIX . 'videos', $_POST[self::PREFIX . 'video'], false);                    
+                }
             }
         }
 
@@ -451,24 +420,6 @@ if (!class_exists('Poi_Camping')) {
                     }
                 }
             }
-        }
-
-        /**
-         * Regeneramos las rewrite rules
-         */
-        public function my_rewrite_flush() {
-            createPostType();
-            flush_rewrite_rules();
-        }
-
-        /**
-         * Writes options to the database
-         * @author Diego Montoto <dmontoto@gmail.com>
-         */
-        public function shutdown() {
-            if (is_admin())
-                if ($this->updatedOptions)
-                    update_option(self::PREFIX . 'options', $this->options);
         }
 
     }

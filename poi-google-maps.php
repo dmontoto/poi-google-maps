@@ -77,6 +77,7 @@ function pgm_requirementsNotMet()
 if( pgm_requirementsMet() )
 {
 	require_once( dirname(__FILE__) . '/core.php' );
+        require_once( dirname(__FILE__) . '/postTypes/base.postType.php' );
         require_once( dirname(__FILE__) . '/postTypes/camping.postType.php' );
         require_once( dirname(__FILE__) . '/taxonomies/region.taxonomy.php' );
         

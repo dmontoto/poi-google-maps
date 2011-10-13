@@ -164,7 +164,7 @@ if (!class_exists('PoiGoogleMaps')) {
         public function loadResources() {
             wp_register_script('googleMapsAPI', 'http' . ( is_ssl() ? 's' : '' ) . '://maps.google.com/maps/api/js?sensor=false', false, false, true);
 
-            wp_register_script('pgm', plugins_url('functions.js', __FILE__), array('googleMapsAPI', 'jquery'), self::VERSION, true);
+            wp_register_script('pgm', plugins_url('/javascript/pgm_gmaps.js', __FILE__), array('googleMapsAPI', 'jquery'), self::VERSION, true);
 
             wp_register_style(self::PREFIX . 'style', plugins_url('/css/style.css', __FILE__), false, self::VERSION, false);
 
@@ -422,13 +422,13 @@ if (!class_exists('PoiGoogleMaps')) {
             $num = number_format_i18n($num_posts->publish);
             echo $num;
             ?></a></td>
-                    <td class="t"><a href="edit.php?post_type=pgm_camping"><?php _e('Campings', 'poithemes'); ?></a></td>
+                    <td class="t"><a href="edit-tags.php?post_type=pgm_camping"><?php _e('Campings', 'poithemes'); ?></a></td>
                 </tr>
                <tr>
                     <td class="first b"><a href="edit.php?taxonomy=region&post_type=pgm_camping"><?php
                     echo wp_count_terms('region');
             ?></a></td>
-                    <td class="t"><a href="edit.php?taxonomy=region&post_type=pgm_camping"><?php _e('Regions', 'poithemes'); ?></a></td>
+                    <td class="t"><a href="edit-tags.php?taxonomy=region&post_type=pgm_camping"><?php _e('Regions', 'poithemes'); ?></a></td>
                 </tr>
             <?php
         }
