@@ -46,7 +46,6 @@ if (!class_exists('PoiGoogleMaps')) {
             add_action('wp', array($this, 'loadResources'), 11);
             add_action('wp_head', array($this, 'outputHead'));
             add_action('wpmu_new_blog', array($this, 'activateNewSite'));
-            add_action('wp_footer', array($this, 'footerScripts'));
             add_action('shutdown', array($this, 'shutdown'));
 
             add_action('right_now_content_table_end', array($this, 'cpt_in_right_now'));
