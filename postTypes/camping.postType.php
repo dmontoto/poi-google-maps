@@ -30,6 +30,9 @@ if (!class_exists('Poi_Camping')) {
             add_action('admin_init', array($this, 'addMetaBoxes'));
             add_action('admin_enqueue_scripts', array($this, 'loadMapAdminResources'), 11);
             
+            // Modify icons for admin bar
+            add_action( 'admin_head', array($this, 'cpt_icons') );
+            
             // Gestion de listado de administracion
             add_filter('parse_query', array($this, 'sortAdminView'));
             add_filter('manage_edit-' . self::POST_TYPE . '_columns', array($this, 'add_new_pgm_columns'));
@@ -422,6 +425,27 @@ if (!class_exists('Poi_Camping')) {
             }
         }
 
+        /**
+         * Modify icons in admin bar and edit post
+         * @global type $post_type 
+         */
+        public function cpt_icons() {
+            global $post_type;
+            ?>
+            <style type="text/css" media="screen">
+            <?php if (($_GET['post_type'] == self::POST_TYPE) || ($post_type == self::POST_TYPE)) : ?>
+            #icon-edit { background:transparent url('<?php echo plugins_url('poi-google-maps/images/campground-big.png');?>') no-repeat; }		
+            <?php endif; ?>
+            #menu-posts-<?php echo self::POST_TYPE ?> .wp-menu-image {
+                background: url(<?php echo plugins_url('poi-google-maps/images/campground.png') ?>) no-repeat 6px -17px !important;
+            }
+            #menu-posts-<?php echo self::POST_TYPE ?>:hover .wp-menu-image, #menu-posts-<?php echo self::POST_TYPE ?>.wp-has-current-submenu .wp-menu-image {
+                background-position:6px 7px!important;
+            }
+            </style>
+            <?php
+            
+        }
     }
 
 }
