@@ -33,6 +33,9 @@ if (!class_exists('Poi_Camping')) {
             // Modify icons for admin bar
             add_action( 'admin_head', array($this, 'cpt_icons') );
             
+            // Assign theme to post type
+            add_action('template_redirect', array($this, 'pgm_camping_template'), 5);
+            
             // Gestion de listado de administracion
             add_filter('parse_query', array($this, 'sortAdminView'));
             add_filter('manage_edit-' . self::POST_TYPE . '_columns', array($this, 'add_new_pgm_columns'));
@@ -444,8 +447,20 @@ if (!class_exists('Poi_Camping')) {
             }
             </style>
             <?php
-            
         }
+        
+        /**
+         * Define what theme has to load for this Post Type
+         */
+        public function pgm_camping_template(){
+            $post_type = get_query_var('post_type');
+            if ($post_type == self::POST_TYPE) {  // check your post type
+                load_template(WP_PLUGIN_DIR . '/poi-google-maps/themes/single-pgm-camping.php');
+                exit;
+            }
+        
+        }
+        
     }
 
 }
